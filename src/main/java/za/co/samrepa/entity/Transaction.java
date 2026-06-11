@@ -7,7 +7,6 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
-// Category import removed — category is now a plain String column
 
 @Entity
 @Table(name = "transactions")
