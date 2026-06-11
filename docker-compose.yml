@@ -1,0 +1,72 @@
+services:
+
+  # ─── Mock OAuth2 / JWT issuer ──────────────────────────────────────────────
+  # Lightweight OIDC server for local development and integration testing.
+  # Token endpoint : POST http://localhost:9000/default/token
+  # JWKS endpoint  : GET  http://localhost:9000/default/jwks
+  mock-oauth2:
+    image: ghcr.io/navikt/mock-oauth2-server:2.1.0
+    container_name: txn-mock-oauth2
+    ports:
+      - "9000:8080"
+    networks:
+      - txn-net
+
+  # ─── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: txn-postgres
+    environment:
+      POSTGRES_DB:       transactions_db
+      POSTGRES_USER:     txn_user
+      POSTGRES_PASSWORD: txn_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U txn_user -d transactions_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - txn-net
+
+  # ─── Application ───────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: txn-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-oauth2:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST:       postgres
+      DB_PORT:       5432
+      DB_NAME:       transactions_db
+      DB_USERNAME:   txn_user
+      DB_PASSWORD:   txn_pass
+      JWKS_URI: http://mock-oauth2:8080/default/jwks
+    ports:
+      - "8080:8080"
+    networks:
+      - txn-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  postgres_data:
+
+networks:
+  txn-net:
+    driver: bridge

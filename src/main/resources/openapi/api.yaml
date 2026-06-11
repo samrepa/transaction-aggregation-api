@@ -1,0 +1,249 @@
+openapi: 3.0.3
+info:
+  title: Transaction Aggregation API
+  version: 1.0.0
+  description: Aggregates customer transactions from multiple sources, categorizes them, and exposes aggregation APIs.
+
+tags:
+  - name: customers
+
+paths:
+
+  /customers/{customerId}/summary:
+    get:
+      tags: [customers]
+      operationId: getCustomerSummary
+      summary: High-level financial summary for a customer
+      parameters:
+        - $ref: '#/components/parameters/customerId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerSummary'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /customers/{customerId}/transactions:
+    get:
+      tags: [customers]
+      operationId: getTransactions
+      summary: Paginated transaction list with optional filters
+      parameters:
+        - $ref: '#/components/parameters/customerId'
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+          example: '2026-01-01'
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+          example: '2026-01-31'
+        - name: category
+          in: query
+          schema:
+            type: string
+          example: GROCERIES
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionPage'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /customers/{customerId}/categories:
+    get:
+      tags: [customers]
+      operationId: getCategoryBreakdown
+      summary: Spending breakdown by category for a given period
+      parameters:
+        - $ref: '#/components/parameters/customerId'
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryBreakdown'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /customers/{customerId}/monthly-spend:
+    get:
+      tags: [customers]
+      operationId: getMonthlySpend
+      summary: Total spend for a specific month
+      parameters:
+        - $ref: '#/components/parameters/customerId'
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+          example: '2026-06'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonthlySpend'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+
+  parameters:
+    customerId:
+      name: customerId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+
+    CustomerSummary:
+      type: object
+      properties:
+        customerId:
+          type: string
+        totalAccounts:
+          type: integer
+        monthlySpend:
+          type: number
+        monthlyIncome:
+          type: number
+
+    TransactionPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionItem'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+
+    TransactionItem:
+      type: object
+      properties:
+        transactionId:
+          type: string
+        merchant:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        category:
+          type: string
+        transactionDate:
+          type: string
+          format: date-time
+        sourceSystem:
+          type: string
+
+    CategoryBreakdown:
+      type: object
+      properties:
+        customerId:
+          type: string
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryTotal'
+
+    CategoryTotal:
+      type: object
+      properties:
+        category:
+          type: string
+        amount:
+          type: number
+        transactionCount:
+          type: integer
+
+    MonthlySpend:
+      type: object
+      properties:
+        customerId:
+          type: string
+        month:
+          type: string
+        amount:
+          type: number
+
+    ErrorResponse:
+      description: RFC 9457 Problem Detail — matches Spring's ProblemDetail response body.
+      type: object
+      properties:
+        type:
+          type: string
+          description: URI identifying the problem type
+        title:
+          type: string
+          description: Short, human-readable summary of the problem
+        status:
+          type: integer
+          description: HTTP status code
+        detail:
+          type: string
+          description: Human-readable explanation specific to this occurrence
+        instance:
+          type: string
+          description: URI of the specific occurrence of the problem
